@@ -151,7 +151,7 @@ body { background-color: var(--cream); font-family: var(--font-body); color: #33
     border: 1px solid #ccc; border-radius: 8px; font-family: inherit;
 }
 
-/* === SCROLLABLE WISH BOX STYLES === */
+/* === SCROLLABLE WISH BOX STYLING === */
 .scrollable-wish-wrapper {
     /* Set a fixed height for the scrollable area */
     max-height: 500px; 
@@ -278,7 +278,3 @@ footer { background: var(--emerald-dark); color: #ccc; padding: 40px 20px; text-
     cursor: pointer;
     font-size: 0.85em;
 }
-
-/* IMPORTANT: DO NOT add 'display: none;' for event cards here. 
-   The visibility is now controlled dynamically by script.js based on the URL.
-*/
