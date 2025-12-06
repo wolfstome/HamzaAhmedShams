@@ -292,7 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (mehndiCard) mehndiCard.style.display = 'block';
                 if (baratCard) baratCard.style.display = 'block';
                 break;
-            case 'mehndiorwalima': // <<<<< NEW FILTER ADDED HERE
+            case 'mehndiorwalima': 
                 if (mehndiCard) mehndiCard.style.display = 'block';
                 if (walimaCard) walimaCard.style.display = 'block';
                 break;
