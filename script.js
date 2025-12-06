@@ -257,7 +257,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function filterEvents() {
         const urlParams = new URLSearchParams(window.location.search);
-        // Gets the value after ?show= (e.g., 'walima' or 'baratwalima')
         const filterType = urlParams.get('show'); 
 
         // Get the card elements using their IDs
@@ -289,10 +288,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (baratCard) baratCard.style.display = 'block';
                 if (walimaCard) walimaCard.style.display = 'block';
                 break;
-            // Add 'mehindbarat' and 'all' for completeness if needed
             case 'mehindbarat':
                 if (mehndiCard) mehndiCard.style.display = 'block';
                 if (baratCard) baratCard.style.display = 'block';
+                break;
+            case 'mehndiorwalima': // <<<<< NEW FILTER ADDED HERE
+                if (mehndiCard) mehndiCard.style.display = 'block';
+                if (walimaCard) walimaCard.style.display = 'block';
                 break;
             case 'all':
             default:
