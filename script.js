@@ -84,90 +84,147 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ======================================================================
-    // 4. WISHES SYSTEM (API INTEGRATION FOR GLOBAL VISIBILITY)
+    // 4. WISHES SYSTEM (LOCAL STORAGE & REPLY LOGIC)
     // ======================================================================
-
-    // !!! PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE !!!
-    const API_URL = 'PASTE_YOUR_COPIED_WEB_APP_URL_HERE'; // <<< REPLACE THIS LINE
-
+    
     const wishForm = document.getElementById('wish-form');
     const wishesFeed = document.getElementById('wishes-feed');
 
-    // --------------------------------------------------
-    // Fetch WISHES from API (GET Request)
-    // --------------------------------------------------
-    async function fetchWishes() {
-        if (!wishesFeed) return;
-        wishesFeed.innerHTML = '<p style="text-align:center; color: var(--emerald);">Loading wishes...</p>';
+    let savedWishes = JSON.parse(localStorage.getItem('sathiWishes')) || [];
+    savedWishes = savedWishes.map(wish => ({
+        ...wish,
+        replies: wish.replies || [] 
+    }));
 
-        try {
-            const response = await fetch(API_URL);
-            if (!response.ok) throw new Error('Failed to fetch wishes from API.');
-            
-            // The API returns the data, we store it and reverse it so newest is on top
-            window.savedWishes = (await response.json()).reverse(); 
-            renderWishes();
-
-        } catch (error) {
-            console.error("Error fetching wishes:", error);
-            wishesFeed.innerHTML = '<p style="text-align:center; color:red;">Could not load wishes. Please try again later.</p>';
-        }
+    function saveWishes() {
+        localStorage.setItem('sathiWishes', JSON.stringify(savedWishes));
     }
 
-    // --------------------------------------------------
-    // Submit a new WISH to API (POST Request)
-    // --------------------------------------------------
-    async function submitWish(name, message) {
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                body: JSON.stringify({ name: name, msg: message }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error('Failed to submit wish.');
-            
-            // After successful submission, re-fetch and re-render all wishes
-            await fetchWishes(); 
-            
-        } catch (error) {
-            console.error("Error submitting wish:", error);
-            alert("Failed to send your wish. Please check your network.");
-        }
-    }
-
-    // --------------------------------------------------
-    // Render Logic (Uses global data from API)
-    // --------------------------------------------------
     function renderWishes() {
         if (!wishesFeed) return;
         wishesFeed.innerHTML = ''; 
-        const currentWishes = window.savedWishes || [];
 
-        if (currentWishes.length === 0) {
+        if (savedWishes.length === 0) {
             wishesFeed.innerHTML = '<p class="no-wishes" style="text-align:center; color:#777; padding-top: 10px;">Be the first to send a wish!</p>';
         }
 
-        currentWishes.forEach((wish) => {
+        savedWishes.forEach((wish, index) => {
+            const hasReplies = wish.replies && wish.replies.length > 0;
             const wishCard = document.createElement('div');
             wishCard.className = 'wish-card slide-up visible'; 
+            wishCard.setAttribute('data-index', index);
 
             let htmlContent = `
                 <div class="wish-main">
                     <p class="wish-text">"${wish.msg}"</p>
                     <p class="wish-author">- ${wish.name}</p>
+                    <div class="wish-actions">
+                        <button class="delete-btn" data-index="${index}">🗑️ Delete</button>
+                        <button class="reply-btn" data-index="${index}">💬 Reply</button>
                     </div>
+                </div>
+            `;
+            
+            htmlContent += `
+                <div class="replies-section" id="replies-${index}">
+            `;
+            
+            if (hasReplies) {
+                htmlContent += `<h4>Replies:</h4>`;
+                
+                wish.replies.forEach(reply => {
+                    const safeName = reply.name.replace(/</g, "<").replace(/>/g, ">");
+                    const safeMsg = reply.message.replace(/</g, "<").replace(/>/g, ">");
+                    htmlContent += `<p class="reply-item"><strong>${safeName}:</strong> ${safeMsg}</p>`;
+                });
+            }
+            
+            htmlContent += `
+                    <form class="reply-form" data-index="${index}">
+                        <input type="text" placeholder="Your Name" required>
+                        <input type="text" placeholder="Your Reply" required>
+                        <button type="submit">Post Reply</button>
+                    </form>
+                </div>
             `;
             
             wishCard.innerHTML = htmlContent;
-            // AppendChild maintains the order (newest on top after reversing the fetch)
-            wishesFeed.appendChild(wishCard); 
+            wishesFeed.prepend(wishCard);
+            
+            const repliesSection = wishCard.querySelector(`#replies-${index}`);
+            if (!hasReplies) {
+                repliesSection.style.display = 'none'; 
+            }
+        });
+
+        addWishesEventListeners();
+    }
+
+    function addWishesEventListeners() {
+        document.querySelectorAll('.delete-btn').forEach(button => {
+            button.onclick = (e) => deleteWish(parseInt(e.target.dataset.index));
+        });
+
+        document.querySelectorAll('.reply-btn').forEach(button => {
+            button.onclick = (e) => {
+                const index = parseInt(e.target.dataset.index);
+                const repliesSection = document.getElementById(`replies-${index}`);
+                
+                const form = repliesSection ? repliesSection.querySelector('.reply-form') : null;
+                
+                if (form && repliesSection) {
+                    const formIsVisible = form.style.display === 'flex';
+
+                    if (formIsVisible) {
+                        form.style.display = 'none';
+                        button.textContent = '💬 Reply'; 
+                        
+                        const hasReplies = savedWishes[index].replies && savedWishes[index].replies.length > 0;
+                        if (!hasReplies) {
+                            repliesSection.style.display = 'none'; 
+                        }
+                    } else {
+                        repliesSection.style.display = 'block'; 
+                        form.style.display = 'flex';           
+                        button.textContent = '❌ Cancel Reply';
+                    }
+                }
+            };
+        });
+
+        document.querySelectorAll('.reply-form').forEach(form => {
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                const index = parseInt(e.target.dataset.index);
+                const replyName = e.target.querySelector('input:nth-child(1)').value.trim();
+                const replyMsg = e.target.querySelector('input:nth-child(2)').value.trim();
+                
+                if (replyName && replyMsg) {
+                    addReply(index, replyName, replyMsg);
+                    e.target.reset();
+                }
+            };
         });
     }
 
-    // Event listener for form submission
+    function deleteWish(index) {
+        if (confirm("Are you sure you want to delete your wish? This is irreversible.")) {
+            savedWishes.splice(index, 1);
+            saveWishes();
+            renderWishes(); 
+        }
+    }
+
+    function addReply(index, name, message) {
+        if (!savedWishes[index].replies) {
+            savedWishes[index].replies = [];
+        }
+        savedWishes[index].replies.push({ name, message, timestamp: new Date().toISOString() });
+        
+        saveWishes();
+        renderWishes(); 
+    }
+
     if (wishForm) {
         wishForm.addEventListener('submit', function(event) {
             event.preventDefault();
@@ -182,15 +239,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!name || !message) return;
 
-            // Call the new submit function
-            submitWish(name, message);
+            const newWish = { name, msg: message, replies: [] };
+            savedWishes.unshift(newWish);
+            saveWishes(); 
             
             wishForm.reset();
+            renderWishes(); 
         });
     }
 
-    // Initial Call to fetch and render wishes when the page loads
-    fetchWishes();
+    // Initial Render
+    renderWishes();
 
     // ======================================================================
     // 5. EVENT FILTERING LOGIC (DYNAMIC VISIBILITY)
