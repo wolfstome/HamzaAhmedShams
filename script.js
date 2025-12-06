@@ -252,9 +252,8 @@ document.addEventListener('DOMContentLoaded', function() {
     renderWishes();
 
     // ======================================================================
-    // 5. EVENT FILTERING LOGIC (DYNAMIC VISIBILITY)
+    // 5. EVENT FILTERING LOGIC (DYNAMIC VISIBILITY + ZOHA LOGIC)
     // ======================================================================
-
     function filterEvents() {
         const urlParams = new URLSearchParams(window.location.search);
         const filterType = urlParams.get('show'); 
@@ -264,16 +263,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const baratCard = document.getElementById('barat-card');
         const walimaCard = document.getElementById('walima-card');
         
-        // List all cards
         const allCards = [mehndiCard, baratCard, walimaCard];
-        
-        // Hide all cards by default before deciding which to show
         allCards.forEach(card => {
             if (card) card.style.display = 'none';
         });
 
-
-        // Decide which card(s) to show based on the URL parameter
+        // Show cards based on URL parameter
         switch (filterType) {
             case 'walima':
                 if (walimaCard) walimaCard.style.display = 'block';
@@ -298,14 +293,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 break;
             case 'all':
             default:
-                // Fallback: If parameter is missing or unknown, show all events
                 allCards.forEach(card => {
                     if (card) card.style.display = 'block';
                 });
                 break;
         }
+
+        // ===================== ZOHA LOGIC =====================
+        const zohaBlock = document.getElementById("zoha-block");
+        if (zohaBlock) {
+            if (filterType === "walima") {
+                zohaBlock.style.display = "none";
+            } else {
+                zohaBlock.style.display = "block";
+            }
+        }
     }
     
     // Run the filter function when the page loads
     filterEvents();
+
 });
