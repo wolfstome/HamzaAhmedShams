@@ -1,310 +1,316 @@
-// ======================================================================
-// CONFIGURATION: GOOGLE SHEET URLs (YOUR KEYS)
-// ======================================================================
-
-// 1. CSV URL: Used to READ the wishes (Your published CSV link)
-const WISHES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqqcKPAStgKwqTNo4HYEltpwLGgXlUa-eIfyF5X5L9ATJF4GS2yi43cVxjshWeaYPlOfGYI1gzs6Ci/pub?output=csv'; 
-
-// 2. WEB APP URL: Used to WRITE/SUBMIT the wishes (from Google Apps Script deployment)
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyH6XRK-bw3XNn5o-Rev7Mpi9NWqRvUXOFPIlcS3F5K2Cs-pQZ1_rQvS2neRK-BclztwA/exec'; // YOUR DEPLOYED URL
-
-const wishesFeed = document.querySelector('.wishes-feed');
-
-
-// ======================================================================
-// MAIN EVENT LISTENER: Ensure all HTML elements are loaded before running
-// ======================================================================
 document.addEventListener('DOMContentLoaded', function() {
 
-    // ======================================================================
-    // 1. AUDIO & WELCOME SCREEN
-    // ======================================================================
-    const welcomeScreen = document.querySelector('.welcome-overlay'); 
-    const enterBtn = document.querySelector('#enter-btn'); 
-    const bgAudio = document.getElementById('bg-audio'); 
+    // ======================================================================
+    // 1. AUDIO & WELCOME SCREEN
+    // ======================================================================
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const enterBtn = document.getElementById('enter-btn');
+    const bgAudio = document.getElementById('bg-audio'); 
 
-    // Lock scroll initially
-    document.body.style.overflow = 'hidden';
+    // Lock scroll initially
+    document.body.style.overflow = 'hidden';
 
-    if (enterBtn && welcomeScreen) {
-        enterBtn.addEventListener('click', () => {
-            welcomeScreen.classList.add('hide-welcome');
-            
-            if (bgAudio) {
-                bgAudio.volume = 0.6; 
-                bgAudio.play().catch(error => console.log("Audio playback failed:", error));
-            }
-            
-            setTimeout(() => {
-                document.body.style.overflow = 'auto';
-            }, 1000); 
-        });
-    }
-
-    // ======================================================================
-    // 2. SCROLL ANIMATIONS
-    // ======================================================================
-    const observerOptions = { threshold: 0.1 };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if(entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, observerOptions);
-
-    document.querySelectorAll('.slide-up').forEach(el => observer.observe(el));
-
-    // ======================================================================
-    // 3. COUNTDOWN TIMER
-    // ======================================================================
-    // ⚠️ IMPORTANT: Set your exact wedding date and time here (Dec 20, 2025 is the placeholder)
-    const targetDate = new Date("Dec 20, 2025 12:00:00").getTime();
-    const countdownGrid = document.querySelector('.countdown-grid'); 
-
-    const SECOND = 1000;
-    const MINUTE = SECOND * 60;
-    const HOUR = MINUTE * 60;
-    const DAY = HOUR * 24;
-    let timerInterval;
-
-    function updateTimer() {
-        const now = new Date().getTime();
-        const diff = targetDate - now;
-
-        if (diff < 0) {
-            if (countdownGrid) {
-                // Adjusting innerHTML to use 'Mubarak!'
-                const startTime = new Date(targetDate);
-                const options = { year: 'numeric', month: 'short', day: 'numeric' };
-                countdownGrid.innerHTML = `<div class="cd-box" style="width:100%; border-color:white;"><span class="cd-num">Mubarak!</span><span class="cd-label">Celebration Started on ${startTime.toLocaleDateString('en-US', options)}</span></div>`;
-            }
-            clearInterval(timerInterval); 
-            return;
-        }
-
-        const days = Math.floor(diff / DAY);
-        const hours = Math.floor((diff % DAY) / HOUR);
-        const mins = Math.floor((diff % HOUR) / MINUTE);
-        const secs = Math.floor((diff % MINUTE) / SECOND);
-
-        if (countdownGrid) {
-            countdownGrid.innerHTML = `
-                <div class="cd-box"><span class="cd-num">${days}</span><span class="cd-label">Days</span></div>
-                <div class="cd-box"><span class="cd-num">${hours}</span><span class="cd-label">Hrs</span></div>
-                <div class="cd-box"><span class="cd-num">${mins}</span><span class="cd-label">Min</span></div>
-                <div class="cd-box"><span class="cd-num">${secs}</span><span class="cd-label">Sec</span></div>
-            `;
-        }
-    }
-
-    if (countdownGrid) {
-        timerInterval = setInterval(updateTimer, SECOND); 
-        updateTimer();
-    }
-    
-    // ======================================================================
-    // 4. WISHES SYSTEM (GOOGLE SHEET FETCHING & SUBMISSION LOGIC)
-    // ======================================================================
-    
-    const wishForm = document.getElementById('wish-form');
-
-    // CSV Parsing Function (Handles basic CSV structure)
-    function parseCSV(csvText) {
-        const lines = csvText.trim().split('\n');
-        if (lines.length < 2) return [];
-
-        // Assuming header structure: Timestamp,Name,Wish,ReplyName,ReplyMessage,ID
-        const headers = lines[0].split(',').map(h => h.trim());
-        const data = [];
-
-        for (let i = 1; i < lines.length; i++) {
-            // Simple split. Note: This assumes no commas within the Name/Wish itself.
-            const values = lines[i].split(','); 
-            const wishObj = {};
-            
-            headers.forEach((header, index) => {
-                // Ensure there is a value before trimming/assigning
-                wishObj[header] = values[index] ? values[index].trim() : '';
-            });
-            
-            // Filter out empty rows or header placeholders
-            if (wishObj.Name && wishObj.Wish && wishObj.Name.toLowerCase() !== 'name') {
-                data.push(wishObj);
-            }
-        }
-        return data;
-    }
-    
-    // Rendering Function
-    function renderWishes(wishes) {
-        if (!wishesFeed) return;
-        wishesFeed.innerHTML = '';
-        
-        if (wishes.length === 0) {
-            wishesFeed.innerHTML = '<p class="no-wishes" style="text-align:center; color:#777; padding-top: 10px;">No wishes found. Be the first to send a blessing!</p>';
-        }
-
-        wishes.forEach(wish => {
-            const hasReply = wish.ReplyName && wish.ReplyMessage;
-            
-            let replyHtml = '';
-            if (hasReply) {
-                replyHtml = `
-                <div class="replies-section" style="display: block;">
-                    <h4>Our Reply:</h4>
-                    <div class="reply-item">
-                        <p><strong>${wish.ReplyName}:</strong> ${wish.ReplyMessage}</p>
-                    </div>
-                </div>
-                `;
-            }
-
-            const wishCard = document.createElement('div');
-            wishCard.className = 'wish-card slide-up visible'; 
-            wishCard.innerHTML = `
-                <div class="wish-main">
-                    <p class="wish-text">"${wish.Wish}"</p>
-                    <p class="wish-author">- ${wish.Name}</p>
-                    <div class="wish-actions" style="display:none;"></div> 
-                </div>
-                ${replyHtml}
-            `;
-            // Prepend new wishes to show newest first
-            wishesFeed.prepend(wishCard); 
-        });
-    }
-
-    // Core Function to Fetch and Display Wishes
-    async function fetchAndRenderWishes() {
-        if (!wishesFeed) return;
-
-        try {
-            const response = await fetch(WISHES_CSV_URL);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const csvData = await response.text();
-            const wishes = parseCSV(csvData);
-            
-            // Reverse array to show newest wishes first (as Google Forms/App Script adds new rows at bottom)
-            wishes.reverse(); 
-            
-            renderWishes(wishes);
-            console.log('Wishes loaded successfully:', wishes.length);
-            
-        } catch (error) {
-            console.error('Error fetching or rendering wishes:', error);
-            if (wishesFeed) {
-                 wishesFeed.innerHTML = '<p class="text-center text-danger">Failed to load wishes. Please check the sheet URL.</p>';
-            }
-        }
-    }
-
-
-    if (wishForm) {
-        // --- WISH SUBMISSION LOGIC (USING WEB APP URL) ---
-        wishForm.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            // Since the URL is set, we skip the placeholder check.
+    if (enterBtn && welcomeScreen && bgAudio) {
+        enterBtn.addEventListener('click', () => {
+            // Hide Welcome Screen
+            welcomeScreen.classList.add('hide-welcome');
             
-            const submitButton = wishForm.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.textContent = 'Sending...';
+            // Play Audio (initiated by user click)
+            bgAudio.volume = 0.6; 
+            bgAudio.play().catch(error => console.log("Audio playback failed:", error));
+            
+            // Unlock Scroll
+            document.body.style.overflow = 'auto';
+        });
+    }
 
-            const data = new FormData(wishForm); // Collects data using input 'name' attributes (Name, Wish)
+    // ======================================================================
+    // 2. SCROLL ANIMATIONS
+    // ======================================================================
+    const observerOptions = { threshold: 0.1 };
 
-            try {
-                // Send data to the Apps Script endpoint
-                const response = await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    body: data,
-                    mode: 'no-cors' // Crucial for cross-domain submission
-                });
-                
-                // Note: The 'no-cors' mode is why the alert is used to tell the user the request was sent.
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if(entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, observerOptions);
 
-                alert('🎉 Your blessing has been submitted! It will appear on the list shortly after the sheet updates.');
-                wishForm.reset();
-                
-                // 💥 THIS LINE IS THE KEY TO REFRESHING THE WEBSITE WISHES 3 SECONDS LATER 💥
-                setTimeout(fetchAndRenderWishes, 3000); 
+    document.querySelectorAll('.slide-up').forEach(el => observer.observe(el));
 
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('❌ Submission failed. Please check your network connection or the WEB_APP_URL.');
-            } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = 'Send Message';
-            }
-        });
-    }
+    // ======================================================================
+    // 3. COUNTDOWN TIMER
+    // ======================================================================
+    const targetDate = new Date("Dec 20, 2025 12:00:00").getTime();
+    const countdownGrid = document.getElementById('countdown');
 
-    // Initial Render of Wishes on Load
-    fetchAndRenderWishes();
+    const SECOND = 1000;
+    const MINUTE = SECOND * 60;
+    const HOUR = MINUTE * 60;
+    const DAY = HOUR * 24;
+    let timerInterval;
 
-    // ======================================================================
-    // 5. EVENT FILTERING LOGIC (DYNAMIC VISIBILITY + ZOHA LOGIC)
-    // ======================================================================
-    function filterEvents() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const filterType = urlParams.get('show'); 
+    function updateTimer() {
+        const now = new Date().getTime();
+        const diff = targetDate - now;
 
-        const mehndiCard = document.getElementById('mehndi-card');
-        const baratCard = document.getElementById('barat-card');
-        const walimaCard = document.getElementById('walima-card');
-        
-        const allCards = [mehndiCard, baratCard, walimaCard];
-        allCards.forEach(card => {
-            if (card) card.style.display = 'none';
-        });
+        if (diff < 0) {
+            if (countdownGrid) {
+                countdownGrid.innerHTML = '<div class="cd-box" style="width:100%; border-color:white;"><span class="cd-num">Mubarak!</span><span class="cd-label">Celebration Started</span></div>';
+            }
+            clearInterval(timerInterval); 
+            return;
+        }
 
-        // Show cards based on URL parameter
-        switch (filterType) {
-            case 'walima':
-                if (walimaCard) walimaCard.style.display = 'block';
-                break;
-            case 'barat':
-                if (baratCard) baratCard.style.display = 'block';
-                break;
-            case 'mehndi':
-                if (mehndiCard) mehndiCard.style.display = 'block';
-                break;
-            case 'baratwalima':
-                if (baratCard) baratCard.style.display = 'block';
-                if (walimaCard) walimaCard.style.display = 'block';
-                break;
-            case 'mehindbarat':
-                if (mehndiCard) mehndiCard.style.display = 'block';
-                if (baratCard) baratCard.style.display = 'block';
-                break;
-            case 'mehndiorwalima': 
-                if (mehndiCard) mehndiCard.style.display = 'block';
-                if (walimaCard) walimaCard.style.display = 'block';
-                break;
-            case 'all':
-            default:
-                allCards.forEach(card => {
-                    if (card) card.style.display = 'block';
-                });
-                break;
-        }
+        const days = Math.floor(diff / DAY);
+        const hours = Math.floor((diff % DAY) / HOUR);
+        const mins = Math.floor((diff % HOUR) / MINUTE);
+        const secs = Math.floor((diff % MINUTE) / SECOND);
 
-        // ===================== ZOHA LOGIC =====================
-        const zohaBlock = document.getElementById("zoha-block");
-        if (zohaBlock) {
-            // Zoha block should be hidden only when 'show=walima'
-            if (filterType === "walima") {
-                zohaBlock.style.display = "none";
-            } else {
-                zohaBlock.style.display = "block";
-            }
-        }
-    }
-    
-    // Run the filter function when the page loads
-    filterEvents();
+        if (countdownGrid) {
+            countdownGrid.innerHTML = `
+                <div class="cd-box"><span class="cd-num">${days}</span><span class="cd-label">Days</span></div>
+                <div class="cd-box"><span class="cd-num">${hours}</span><span class="cd-label">Hrs</span></div>
+                <div class="cd-box"><span class="cd-num">${mins}</span><span class="cd-label">Min</span></div>
+                <div class="cd-box"><span class="cd-num">${secs}</span><span class="cd-label">Sec</span></div>
+            `;
+        }
+    }
 
-});
+    if (countdownGrid) {
+        timerInterval = setInterval(updateTimer, SECOND); 
+        updateTimer();
+    }
+    
+    // ======================================================================
+    // 4. WISHES SYSTEM (LOCAL STORAGE & REPLY LOGIC)
+    // ======================================================================
+    
+    const wishForm = document.getElementById('wish-form');
+    const wishesFeed = document.getElementById('wishes-feed');
+
+    let savedWishes = JSON.parse(localStorage.getItem('sathiWishes')) || [];
+    savedWishes = savedWishes.map(wish => ({
+        ...wish,
+        replies: wish.replies || [] 
+    }));
+
+    function saveWishes() {
+        localStorage.setItem('sathiWishes', JSON.stringify(savedWishes));
+    }
+
+    function renderWishes() {
+        if (!wishesFeed) return;
+        wishesFeed.innerHTML = ''; 
+
+        if (savedWishes.length === 0) {
+            wishesFeed.innerHTML = '<p class="no-wishes" style="text-align:center; color:#777; padding-top: 10px;">Be the first to send a wish!</p>';
+        }
+
+        savedWishes.forEach((wish, index) => {
+            const hasReplies = wish.replies && wish.replies.length > 0;
+            const wishCard = document.createElement('div');
+            wishCard.className = 'wish-card slide-up visible'; 
+            wishCard.setAttribute('data-index', index);
+
+            let htmlContent = `
+                <div class="wish-main">
+                    <p class="wish-text">"${wish.msg}"</p>
+                    <p class="wish-author">- ${wish.name}</p>
+                    <div class="wish-actions">
+                        <button class="delete-btn" data-index="${index}">🗑️ Delete</button>
+                        <button class="reply-btn" data-index="${index}">💬 Reply</button>
+                    </div>
+                </div>
+            `;
+            
+            htmlContent += `
+                <div class="replies-section" id="replies-${index}">
+            `;
+            
+            if (hasReplies) {
+                htmlContent += `<h4>Replies:</h4>`;
+                
+                wish.replies.forEach(reply => {
+                    const safeName = reply.name.replace(/</g, "<").replace(/>/g, ">");
+                    const safeMsg = reply.message.replace(/</g, "<").replace(/>/g, ">");
+                    htmlContent += `<p class="reply-item"><strong>${safeName}:</strong> ${safeMsg}</p>`;
+                });
+            }
+            
+            htmlContent += `
+                    <form class="reply-form" data-index="${index}">
+                        <input type="text" placeholder="Your Name" required>
+                        <input type="text" placeholder="Your Reply" required>
+                        <button type="submit">Post Reply</button>
+                    </form>
+                </div>
+            `;
+            
+            wishCard.innerHTML = htmlContent;
+            wishesFeed.prepend(wishCard);
+            
+            const repliesSection = wishCard.querySelector(`#replies-${index}`);
+            if (!hasReplies) {
+                repliesSection.style.display = 'none'; 
+            }
+        });
+
+        addWishesEventListeners();
+    }
+
+    function addWishesEventListeners() {
+        document.querySelectorAll('.delete-btn').forEach(button => {
+            button.onclick = (e) => deleteWish(parseInt(e.target.dataset.index));
+        });
+
+        document.querySelectorAll('.reply-btn').forEach(button => {
+            button.onclick = (e) => {
+                const index = parseInt(e.target.dataset.index);
+                const repliesSection = document.getElementById(`replies-${index}`);
+                
+                const form = repliesSection ? repliesSection.querySelector('.reply-form') : null;
+                
+                if (form && repliesSection) {
+                    const formIsVisible = form.style.display === 'flex';
+
+                    if (formIsVisible) {
+                        form.style.display = 'none';
+                        button.textContent = '💬 Reply'; 
+                        
+                        const hasReplies = savedWishes[index].replies && savedWishes[index].replies.length > 0;
+                        if (!hasReplies) {
+                            repliesSection.style.display = 'none'; 
+                        }
+                    } else {
+                        repliesSection.style.display = 'block'; 
+                        form.style.display = 'flex';           
+                        button.textContent = '❌ Cancel Reply';
+                    }
+                }
+            };
+        });
+
+        document.querySelectorAll('.reply-form').forEach(form => {
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                const index = parseInt(e.target.dataset.index);
+                const replyName = e.target.querySelector('input:nth-child(1)').value.trim();
+                const replyMsg = e.target.querySelector('input:nth-child(2)').value.trim();
+                
+                if (replyName && replyMsg) {
+                    addReply(index, replyName, replyMsg);
+                    e.target.reset();
+                }
+            };
+        });
+    }
+
+    function deleteWish(index) {
+        if (confirm("Are you sure you want to delete your wish? This is irreversible.")) {
+            savedWishes.splice(index, 1);
+            saveWishes();
+            renderWishes(); 
+        }
+    }
+
+    function addReply(index, name, message) {
+        if (!savedWishes[index].replies) {
+            savedWishes[index].replies = [];
+        }
+        savedWishes[index].replies.push({ name, message, timestamp: new Date().toISOString() });
+        
+        saveWishes();
+        renderWishes(); 
+    }
+
+    if (wishForm) {
+        wishForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const nameInput = document.getElementById('user-name');
+            const messageInput = document.getElementById('user-msg');
+            
+            if (!nameInput || !messageInput) return;
+
+            const name = nameInput.value.trim();
+            const message = messageInput.value.trim();
+
+            if (!name || !message) return;
+
+            const newWish = { name, msg: message, replies: [] };
+            savedWishes.unshift(newWish);
+            saveWishes(); 
+            
+            wishForm.reset();
+            renderWishes(); 
+        });
+    }
+
+    // Initial Render
+    renderWishes();
+
+    // ======================================================================
+    // 5. EVENT FILTERING LOGIC (DYNAMIC VISIBILITY + ZOHA LOGIC)
+    // ======================================================================
+    function filterEvents() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const filterType = urlParams.get('show'); 
+
+        // Get the card elements using their IDs
+        const mehndiCard = document.getElementById('mehndi-card');
+        const baratCard = document.getElementById('barat-card');
+        const walimaCard = document.getElementById('walima-card');
+        
+        const allCards = [mehndiCard, baratCard, walimaCard];
+        allCards.forEach(card => {
+            if (card) card.style.display = 'none';
+        });
+
+        // Show cards based on URL parameter
+        switch (filterType) {
+            case 'walima':
+                if (walimaCard) walimaCard.style.display = 'block';
+                break;
+            case 'barat':
+                if (baratCard) baratCard.style.display = 'block';
+                break;
+            case 'mehndi':
+                if (mehndiCard) mehndiCard.style.display = 'block';
+                break;
+            case 'baratwalima':
+                if (baratCard) baratCard.style.display = 'block';
+                if (walimaCard) walimaCard.style.display = 'block';
+                break;
+            case 'mehindbarat':
+                if (mehndiCard) mehndiCard.style.display = 'block';
+                if (baratCard) baratCard.style.display = 'block';
+                break;
+            case 'mehndiorwalima': 
+                if (mehndiCard) mehndiCard.style.display = 'block';
+                if (walimaCard) walimaCard.style.display = 'block';
+                break;
+            case 'all':
+            default:
+                allCards.forEach(card => {
+                    if (card) card.style.display = 'block';
+                });
+                break;
+        }
+
+        // ===================== ZOHA LOGIC =====================
+        const zohaBlock = document.getElementById("zoha-block");
+        if (zohaBlock) {
+            if (filterType === "walima") {
+                zohaBlock.style.display = "none";
+            } else {
+                zohaBlock.style.display = "block";
+            }
+        }
+    }
+    
+    // Run the filter function when the page loads
+    filterEvents();
+
+})
